@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Streamlit specific
+.streamlit/local/
+.streamlit/config.toml # if you have local config
+.streamlit/credentials.toml # if you have local credential
+# Operating System
+.DS_Store
+Thumbs.db
