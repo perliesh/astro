@@ -29,17 +29,13 @@ if uploaded_file:
 
             if image_hdu is None:
                 st.error("FITS 파일에 이미지 데이터가 포함된 HDU를 찾을 수 없습니다.")
+                st.stop()
             else:
-                header = image_hdu.reader
-                data = image_hdu._data
+                header = image_hdu.header
+                data = image_hdu.data
                 data = np.nan_to_num(data)
 
-                st.success(f"**'{uploaded_file.name}'** 파일을 성공적으로 처리했습니다.")
-
-            # header, data 정의
-            header = image_hdu.header
-            data = image_hdu.data
-
+                st.success(f"**'{uploaded_file.name}'** 파일을 성공적으로 처리했습니다")
             # --- WCS 정보 추출 시도 ---
             try:
                 wcs = WCS(header)
