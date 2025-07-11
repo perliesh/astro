@@ -36,20 +36,27 @@ if uploaded_file:
                 data = np.nan_to_num(data)
 
                 st.success(f"**'{uploaded_file.name}'** 파일을 성공적으로 처리했습니다")
+                
             # --- WCS 정보 추출 시도 ---
+            ra, dec = None, None
             try:
                 wcs = WCS(header)
-                ny, nx = data.shape[-2], data.shape[-1]  # 2D 이미지 크기
-                x_center, y_center = nx / 2, ny / 2
-                skycoord_center = wcs.pixel_to_world(x_center, y_center)
-                if isinstance(skycoord_center, (list, np.array)):
-                    skycoord_center = skycoord_center[0]
-                ra = skycoord_center.ra.deg
-                dec = skycoord_center.dec.deg
-                st.success(f"이미지 중심 좌표 (WCS 기준): RA={ra:.5f}°, DEC={dec:.5f}°")
+                if wcs.has_celestial:
+                    ny, nx = data.shape[-2], data.shape[-1]
+                    x_center, y_center = nx / 2, ny / 2
+                    skycoord_center = wcs.pixel_to_world(x_center, y_center)
+
+                    if hasattr(skycoord_center, "ra"):
+                        ra = skycoord_center.ra.deg
+                        dec = skycoord_center.dec.deg
+                        st.success(f"이미지 중심 좌표 (WCS 기준): RA={ra:.5f}°, DEC={dec:.5f}°")
+                    else:
+                        raise ValueError("WCS 결과에 RA/DEC 정보가 없습니다.")
+                else:
+                    raise ValueError("WCS 정보에 천구 좌표가 없습니다.")
             except Exception as e:
                 st.warning(f"WCS 해석 실패: {e}")
-
+                
                 # WCS 해석 실패 시 헤더에서 RA/DEC 직접 추출 시도
                 # 흔히 'RA', 'DEC' 대신 'OBJCTRA', 'OBJCTDEC' 혹은 'CRVAL1', 'CRVAL2' 쓰이기도 함
                 ra = None
