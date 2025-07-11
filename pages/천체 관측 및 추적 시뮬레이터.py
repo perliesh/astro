@@ -3,15 +3,16 @@ import numpy as np
 import plotly.graph_objs as go
 from astropy.io import fits
 from astropy.wcs import WCS
-from astropy.coordinates import EarthLocation, AltAz, SkyCoord
+from astropy.coordinates import EarthLocation, AltAz, SkyCoord, Angle
 from astropy.time import Time
 from datetime import datetime
 import astropy.units as u
 
+# --- 페이지 설정 ---
 st.set_page_config(page_title="천체 위치 시뮬레이터", layout="wide")
 st.title("🔭 천체 위치 추적 및 관측 시뮬레이터")
 
-# --- 서울 위치 (고정) ---
+# --- 서울 위치 고정 ---
 seoul_location = EarthLocation(lat=37.5665*u.deg, lon=126.9780*u.deg, height=50)
 
 # --- FITS 파일 업로드 ---
@@ -20,7 +21,7 @@ uploaded_file = st.file_uploader("FITS 파일을 업로드하세요 (WCS 또는 
 if uploaded_file:
     try:
         with fits.open(uploaded_file) as hdul:
-            # 이미지 데이터가 있는 첫 HDU 찾기 (2차원 이상 이미지 데이터만)
+            # 이미지가 있는 HDU 찾기
             image_hdu = None
             for hdu in hdul:
                 if hdu.data is not None and hdu.is_image:
@@ -30,60 +31,57 @@ if uploaded_file:
             if image_hdu is None:
                 st.error("FITS 파일에 이미지 데이터가 포함된 HDU를 찾을 수 없습니다.")
                 st.stop()
-            else:
-                header = image_hdu.header
-                data = image_hdu.data
-                data = np.nan_to_num(data)
 
-                st.success(f"**'{uploaded_file.name}'** 파일을 성공적으로 처리했습니다")
-                
-            # --- WCS 정보 추출 시도 ---
-            ra, dec = None, None
+            header = image_hdu.header
+            data = image_hdu.data
+            data = np.nan_to_num(data)
+
+            st.success(f"**'{uploaded_file.name}'** 파일을 성공적으로 처리했습니다.")
+
+            # --- WCS 시도 ---
             try:
                 wcs = WCS(header)
-                if wcs.has_celestial:
-                    ny, nx = data.shape[-2], data.shape[-1]
-                    x_center, y_center = nx / 2, ny / 2
-                    skycoord_center = wcs.pixel_to_world(x_center, y_center)
-
-                    if hasattr(skycoord_center, "ra"):
-                        ra = skycoord_center.ra.deg
-                        dec = skycoord_center.dec.deg
-                        st.success(f"이미지 중심 좌표 (WCS 기준): RA={ra:.5f}°, DEC={dec:.5f}°")
-                    else:
-                        raise ValueError("WCS 결과에 RA/DEC 정보가 없습니다.")
-                else:
-                    raise ValueError("WCS 정보에 천구 좌표가 없습니다.")
+                ny, nx = data.shape[-2], data.shape[-1]
+                x_center, y_center = nx / 2, ny / 2
+                skycoord_center = wcs.pixel_to_world(x_center, y_center)
+                ra = skycoord_center.ra.deg
+                dec = skycoord_center.dec.deg
+                st.success(f"이미지 중심 좌표 (WCS 기준): RA={ra:.5f}°, DEC={dec:.5f}°")
             except Exception as e:
                 st.warning(f"WCS 해석 실패: {e}")
-                
-                # WCS 해석 실패 시 헤더에서 RA/DEC 직접 추출 시도
-                # 흔히 'RA', 'DEC' 대신 'OBJCTRA', 'OBJCTDEC' 혹은 'CRVAL1', 'CRVAL2' 쓰이기도 함
-                ra = None
-                dec = None
 
-                # 후보 키 리스트
+                # --- 대체 RA/DEC 추출 ---
                 ra_keys = ['RA', 'OBJCTRA', 'CRVAL1']
                 dec_keys = ['DEC', 'OBJCTDEC', 'CRVAL2']
+                ra = dec = None
 
                 for key in ra_keys:
                     if key in header:
-                        ra = header[key]
-                        break
+                        try:
+                            ra = Angle(header[key], unit=u.hourangle).deg
+                            break
+                        except:
+                            ra = float(header[key])
+                            break
+
                 for key in dec_keys:
                     if key in header:
-                        dec = header[key]
-                        break
+                        try:
+                            dec = Angle(header[key], unit=u.deg).deg
+                            break
+                        except:
+                            dec = float(header[key])
+                            break
 
                 if ra is not None and dec is not None:
-                    st.success(f"헤더 RA/DEC 사용: RA={ra}°, DEC={dec}°")
+                    st.success(f"헤더 RA/DEC 사용: RA={ra:.5f}°, DEC={dec:.5f}°")
                 else:
-                    st.error("WCS 정보 및 RA/DEC 헤더가 모두 없습니다.")
+                    st.error("WCS 및 RA/DEC 헤더 정보를 모두 사용할 수 없습니다.")
                     st.stop()
 
-            # 현재 시간 기준 Alt/Az 계산
+            # --- 현재 시간 기준 Alt/Az 계산 ---
             now = Time(datetime.utcnow())
-            skycoord = SkyCoord(ra, dec, unit=('hourangle', 'deg'))
+            skycoord = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
             altaz_now = skycoord.transform_to(AltAz(obstime=now, location=seoul_location))
             altitude = altaz_now.alt.deg
             azimuth = altaz_now.az.deg
@@ -91,7 +89,7 @@ if uploaded_file:
             st.markdown(f"### 현재 시간 (UTC): {now.iso}")
             st.markdown(f"**서울 기준 현재 위치 → 고도: {altitude:.2f}°, 방위각: {azimuth:.2f}°**")
 
-            # 관측 가능 여부 간단 판단
+            # --- 관측 가능성 판단 ---
             if altitude > 10:
                 st.success("이 천체는 현재 서울에서 관측 가능합니다! (고도 > 10°)")
             else:
@@ -116,13 +114,10 @@ if uploaded_file:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- 천구 지도에 현재 위치 표시 ---
+            # --- 천구 지도 (Aitoff 투영) ---
             st.subheader("천구 좌표계 상의 현재 천체 위치")
-            fig_map = go.Figure()
-
-            # RA를 0~360이 아닌 -180~180 범위로 변환 (Aitoff 투영 맞춤)
             ra_wrap = (ra + 180) % 360 - 180
-
+            fig_map = go.Figure()
             fig_map.add_trace(go.Scattergeo(
                 lon=[ra_wrap],
                 lat=[dec],
