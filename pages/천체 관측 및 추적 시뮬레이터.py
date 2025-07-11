@@ -104,7 +104,11 @@ if uploaded_file:
 
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=times.datetime, y=altazs.alt.deg, mode='lines+markers', name='고도 (°)'))
-            fig.add_trace(go.Scatter(x=times.datetime, y=altazs.az.deg, mode='lines+markers', name='방위각 (°)'))
+            az_unwrapped = np.unwrap(np.radians(altazs.az.deg))
+            az_unwrapped_deg = np.degrees(az_unwrapped)
+
+            fig.add_trace(go.Scatter(x=times.datetime, y=az_unwrapped_deg, mode='lines+markers', name='방위각 (°)'))
+
             fig.update_layout(
                 title="시간에 따른 고도 및 방위각 변화",
                 xaxis_title="시간 (UTC)",
