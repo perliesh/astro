@@ -42,6 +42,8 @@ if uploaded_file:
                 ny, nx = data.shape[-2], data.shape[-1]  # 2D 이미지 크기
                 x_center, y_center = nx / 2, ny / 2
                 skycoord_center = wcs.pixel_to_world(x_center, y_center)
+                if isinstance(skycoord_center, (list, np.array)):
+                    skycoord_center = skycoord_center[0]
                 ra = skycoord_center.ra.deg
                 dec = skycoord_center.dec.deg
                 st.success(f"이미지 중심 좌표 (WCS 기준): RA={ra:.5f}°, DEC={dec:.5f}°")
@@ -74,7 +76,7 @@ if uploaded_file:
 
             # 현재 시간 기준 Alt/Az 계산
             now = Time(datetime.utcnow())
-            skycoord = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
+            skycoord = SkyCoord(ra, dec, unit=('hourangle', 'deg'))
             altaz_now = skycoord.transform_to(AltAz(obstime=now, location=seoul_location))
             altitude = altaz_now.alt.deg
             azimuth = altaz_now.az.deg
